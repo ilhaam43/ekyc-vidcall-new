@@ -1,0 +1,27 @@
+{
+  "name": "@ekyc/dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5301",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "seed": "node --env-file=../.env scripts/seed.mjs"
+  },
+  "dependencies": {
+    "@ekyc/shared": "1.0.0",
+    "@ant-design/icons": "6.3.4",
+    "bcryptjs": "3.0.3",
+    "fflate": "0.8.3",
+    "express": "5.2.1",
+    "express-rate-limit": "8.7.0",
+    "helmet": "8.3.0",
+    "knex": "3.3.0",
+    "pg": "8.23.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router-dom": "7.18.4",
+    "redis": "6.2.1"
+  }
+}

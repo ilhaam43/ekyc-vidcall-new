@@ -1,0 +1,5 @@
+FROM ghcr.io/jitsi/jibri:stable-11248
+USER root
+# Keep Jibri's private control API reachable only on the Compose media network.
+RUN sed -i '/external-api-port = {{ .Env.JIBRI_HTTP_API_EXTERNAL_PORT }}/a\        external-api-host = "0.0.0.0"' /defaults/jibri.conf
+USER s6

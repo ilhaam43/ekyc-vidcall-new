@@ -1,0 +1,44 @@
+{
+  "name": "ekyc-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "packages/*",
+    "ekyc-agent-frontend",
+    "ekyc-backend-master",
+    "ekyc-vidcall-backend",
+    "ekyc-dashboard-new",
+    "kong-console"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build -w @ekyc/frontend && npm run build -w @ekyc/dashboard",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:integration": "node --env-file=.env node_modules/vitest/vitest.mjs run --config vitest.integration.config.js",
+    "test:e2e": "playwright test",
+    "db:migrate": "node --env-file=.env scripts/migrate.mjs",
+    "db:seed": "node --env-file=.env scripts/seed.mjs",
+    "inventory": "node scripts/inventory.mjs",
+    "secrets:generate": "node scripts/secrets.mjs",
+    "jitsi:prepare": "node scripts/prepare-jitsi.mjs",
+    "demo:call": "node --env-file=.env scripts/demo-call.mjs",
+    "demo:embedded": "node --env-file=.env scripts/demo-embedded-local.mjs",
+    "release:check": "node --env-file=.env scripts/release-check.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "eslint": "10.11.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "supertest": "7.3.0",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
+  }
+}

@@ -1,0 +1,111 @@
+services:
+  calls:
+    networks: [default, meet.jitsi]
+    environment:
+      RECORDING_STAGING_DIR: /recordings
+    volumes:
+      - ${CONFIG:-./.local/jitsi}/storage/jibri/recordings:/recordings
+  prosody:
+    networks: [default, meet.jitsi]
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:?required}
+      EKYC_CALLS_URL: http://calls:5030
+      XMPP_MUC_MODULES: ekyc_guard,token_affiliation
+  web:
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      AUTH_TYPE: jwt
+      ENABLE_AUTH: '1'
+      ENABLE_GUESTS: '0'
+      ENABLE_RECORDING: '1'
+      ENABLE_LOCAL_RECORDING: '0'
+      ENABLE_P2P: '0'
+      JWT_APP_ID: ekyc
+      JWT_APP_SECRET: ${JITSI_JWT_SECRET:?required}
+      JWT_ALLOW_EMPTY: '0'
+      PUBLIC_URL: https://${JITSI_DOMAIN:?required}
+  jicofo:
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      AUTH_TYPE: jwt
+      ENABLE_AUTH: '1'
+      # Prosody validates room-bound JWTs and eKYC admission. Jicofo's JWT
+      # domain gate rejects Jibri's separately authenticated recorder domain.
+      JICOFO_ENABLE_AUTH: '0'
+      ENABLE_AUTO_OWNER: '0'
+      ENABLE_MODERATOR_CHECKS: '1'
+      ENABLE_RECORDING: '1'
+      JIBRI_BREWERY_MUC: jibribrewery
+  jvb:
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      JVB_ADVERTISE_IPS: ${JVB_ADVERTISE_IPS:?Set the public Linux media address}
+  jibri1: &jibri
+    build: { context: ., dockerfile: infra/jitsi/Dockerfile.jibri }
+    image: ekyc-jibri:stable-11248
+    restart: unless-stopped
+    shm_size: 2gb
+    volumes:
+      - ${CONFIG:-./.local/jitsi}/jibri1:/config
+      - ${CONFIG:-./.local/jitsi}/storage/jibri:/storage
+      - ${CONFIG:-./.local/jitsi}/storage/jibri/recordings:/recordings
+    environment: &jibri-env
+      TZ: ${TZ:-Asia/Jakarta}
+      DISPLAY: ':0'
+      PUBLIC_URL: https://${JITSI_DOMAIN:?required}
+      JIBRI_INSTANCE_ID: jibri1
+      JIBRI_HTTP_API_INTERNAL_PORT: 2222
+      JIBRI_HTTP_API_EXTERNAL_PORT: 2223
+      JIBRI_RECORDING_DIR: /recordings
+      JIBRI_RECORDER_USER: recorder
+      JIBRI_RECORDER_PASSWORD: ${JIBRI_RECORDER_PASSWORD:?required}
+      JIBRI_XMPP_USER: jibri
+      JIBRI_XMPP_PASSWORD: ${JIBRI_XMPP_PASSWORD:?required}
+      JIBRI_BREWERY_MUC: jibribrewery
+      XMPP_SERVER: prosody
+      XMPP_DOMAIN: meet.jitsi
+      XMPP_AUTH_DOMAIN: auth.meet.jitsi
+      XMPP_INTERNAL_MUC_DOMAIN: internal-muc.meet.jitsi
+      XMPP_RECORDER_DOMAIN: recorder.meet.jitsi
+      JIBRI_WEBHOOK_SUBSCRIBERS: http://calls:5030/internal/jibri/${RECORDING_SECRET:?required}
+    depends_on: [prosody, jicofo, calls]
+    networks: [default, meet.jitsi]
+  jibri2:
+    <<: *jibri
+    volumes:
+      - ${CONFIG:-./.local/jitsi}/jibri2:/config
+      - ${CONFIG:-./.local/jitsi}/storage/jibri:/storage
+      - ${CONFIG:-./.local/jitsi}/storage/jibri/recordings:/recordings
+    environment:
+      <<: *jibri-env
+      JIBRI_INSTANCE_ID: jibri2
+  jibri3:
+    <<: *jibri
+    volumes:
+      - ${CONFIG:-./.local/jitsi}/jibri3:/config
+      - ${CONFIG:-./.local/jitsi}/storage/jibri:/storage
+      - ${CONFIG:-./.local/jitsi}/storage/jibri/recordings:/recordings
+    environment:
+      <<: *jibri-env
+      JIBRI_INSTANCE_ID: jibri3
+  jibri4:
+    <<: *jibri
+    volumes:
+      - ${CONFIG:-./.local/jitsi}/jibri4:/config
+      - ${CONFIG:-./.local/jitsi}/storage/jibri:/storage
+      - ${CONFIG:-./.local/jitsi}/storage/jibri/recordings:/recordings
+    environment:
+      <<: *jibri-env
+      JIBRI_INSTANCE_ID: jibri4
+  jibri5:
+    <<: *jibri
+    volumes:
+      - ${CONFIG:-./.local/jitsi}/jibri5:/config
+      - ${CONFIG:-./.local/jitsi}/storage/jibri:/storage
+      - ${CONFIG:-./.local/jitsi}/storage/jibri/recordings:/recordings
+    environment:
+      <<: *jibri-env
+      JIBRI_INSTANCE_ID: jibri5
+networks:
+  meet.jitsi: {}

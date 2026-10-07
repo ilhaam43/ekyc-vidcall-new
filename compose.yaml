@@ -1,0 +1,166 @@
+name: ekyc-new
+x-app-env: &app-env
+  NODE_ENV: ${NODE_ENV:-development}
+  TZ: ${TZ:-Asia/Jakarta}
+  DATABASE_URL: postgres://ekyc:${POSTGRES_PASSWORD:?Generate .env first}@postgres:5432/ekyc
+  JWT_SECRET: ${JWT_SECRET:?required}
+  INTERNAL_SECRET: ${INTERNAL_SECRET:?required}
+  GATEWAY_SECRET: ${GATEWAY_SECRET:?required}
+  RECORDING_SECRET: ${RECORDING_SECRET:?required}
+  JITSI_JWT_SECRET: ${JITSI_JWT_SECRET:?required}
+  JITSI_DOMAIN: ${JITSI_DOMAIN:-meet.localhost}
+  JITSI_APP_ID: ekyc
+  PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:5173}
+  MASTER_URL: http://master:8080
+  CALLS_URL: http://calls:5030
+  VALKEY_URL: redis://valkey:6379
+  OBJECT_ENDPOINT: http://storage:8333
+  OBJECT_ACCESS_KEY: ${OBJECT_ACCESS_KEY:-ekyc}
+  OBJECT_SECRET_KEY: ${OBJECT_SECRET_KEY:?required}
+  ENCRYPTION_URL: ${ENCRYPTION_URL:-}
+  ENCRYPTION_MOCK: ${ENCRYPTION_MOCK:-false}
+  MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-}
+  MASTER_ENCRYPTION_IV: ${MASTER_ENCRYPTION_IV:-}
+  RECORDING_SLOTS: 5
+  JIBRI_RECORDER_PASSWORD: ${JIBRI_RECORDER_PASSWORD:?required}
+  XMPP_RECORDER_DOMAIN: recorder.meet.jitsi
+  PROSODY_CONTROL_URL: http://prosody:5280/ekyc-control
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment: { POSTGRES_USER: ekyc, POSTGRES_DB: ekyc, POSTGRES_PASSWORD: '${POSTGRES_PASSWORD:?required}', TZ: '${TZ:-Asia/Jakarta}' }
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck: { test: ['CMD-SHELL', 'pg_isready -U ekyc -d ekyc'], interval: 5s, timeout: 3s, retries: 20 }
+    restart: unless-stopped
+  valkey:
+    image: valkey/valkey:8-alpine
+    environment: { TZ: '${TZ:-Asia/Jakarta}' }
+    command: [valkey-server, --appendonly, 'yes']
+    volumes: [valkey-data:/data]
+    healthcheck: { test: ['CMD', valkey-cli, ping], interval: 5s, timeout: 3s, retries: 20 }
+    restart: unless-stopped
+  storage:
+    image: chrislusf/seaweedfs:4.47
+    command: ['mini', '-dir=/data']
+    environment: { AWS_ACCESS_KEY_ID: '${OBJECT_ACCESS_KEY:-ekyc}', AWS_SECRET_ACCESS_KEY: '${OBJECT_SECRET_KEY:?required}', TZ: '${TZ:-Asia/Jakarta}' }
+    volumes: [storage-data:/data]
+    restart: unless-stopped
+  storage-ui:
+    image: ghcr.io/wenisch-tech/s3webui@sha256:54df53aa67af379a8151bf41f9b21f5442b9236f632c6e8c365d834823ce7353
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      JAVA_TOOL_OPTIONS: '-Duser.timezone=${TZ:-Asia/Jakarta}'
+      ADMIN_EMAIL: ${OBJECT_UI_ADMIN_EMAIL:?required}
+      ADMIN_PASSWORD: ${OBJECT_UI_ADMIN_PASSWORD:?required}
+      S3_ACCESS_KEY: ${OBJECT_ACCESS_KEY:-ekyc}
+      S3_SECRET_KEY: ${OBJECT_SECRET_KEY:?required}
+      S3_ENDPOINT_URL: http://storage:8333
+      S3_REGION: us-east-1
+      SPRING_DATASOURCE_URL: jdbc:h2:file:/app/data/s3webui
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.h2.Driver
+      SPRING_DATASOURCE_USERNAME: sa
+      DISABLE_AUTHENTICATION: 'false'
+      IAM_ENABLED: 'false'
+    volumes: [storage-ui-data:/app/data]
+    depends_on: { storage: { condition: service_started } }
+    restart: unless-stopped
+  migrate:
+    build: { context: ., dockerfile: infra/Dockerfile, target: backend }
+    command: [node, scripts/migrate.mjs]
+    environment: *app-env
+    depends_on: { postgres: { condition: service_healthy } }
+  master:
+    build: { context: ., dockerfile: infra/Dockerfile, target: backend }
+    command: [node, ekyc-backend-master/src/server.js]
+    environment: *app-env
+    depends_on: { migrate: { condition: service_completed_successfully }, storage: { condition: service_started } }
+    healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://localhost:8080/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 10s, timeout: 5s, retries: 10 }
+    restart: unless-stopped
+  calls:
+    build: { context: ., dockerfile: infra/Dockerfile, target: backend }
+    command: [node, ekyc-vidcall-backend/src/server.js]
+    environment: *app-env
+    depends_on: { migrate: { condition: service_completed_successfully }, valkey: { condition: service_healthy }, master: { condition: service_healthy } }
+    healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://localhost:5030/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 10s, timeout: 5s, retries: 10 }
+    restart: unless-stopped
+  frontend:
+    build: { context: ., dockerfile: infra/Dockerfile, target: frontend, args: { VITE_BASE_PATH: '/' } }
+    ports: ['127.0.0.1:5173:8080']
+    depends_on: { master: { condition: service_healthy }, calls: { condition: service_healthy } }
+    restart: unless-stopped
+  embedded-frontend:
+    profiles: [integration]
+    build: { context: ., dockerfile: infra/Dockerfile, target: frontend, args: { VITE_BASE_PATH: '/ekyc-agent/' } }
+    depends_on: { master: { condition: service_healthy }, calls: { condition: service_healthy } }
+    restart: unless-stopped
+  dashboard:
+    build: { context: ., dockerfile: infra/Dockerfile, target: dashboard }
+    command: [node, ekyc-dashboard-new/server/index.js]
+    environment:
+      <<: *app-env
+      DASHBOARD_PORT: 5301
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://127.0.0.1:5301}
+      DASHBOARD_MOCK_EXTERNALS: ${DASHBOARD_MOCK_EXTERNALS:-false}
+      DASHBOARD_EXPORT_BUCKET: ${DASHBOARD_EXPORT_BUCKET:-ekyc-dashboard-exports}
+      KONG_ADMIN_URL: ${KONG_ADMIN_URL:-}
+      KONG_ADMIN_TOKEN: ${KONG_ADMIN_TOKEN:-}
+      KONG_ADMIN_TOKEN_HEADER: ${KONG_ADMIN_TOKEN_HEADER:-Kong-Admin-Token}
+      KONG_API_ROUTE_ID: ${KONG_API_ROUTE_ID:-}
+      KONG_RATE_LIMIT_POLICY: ${KONG_RATE_LIMIT_POLICY:-local}
+      KONG_RATE_REDIS_HOST: ${KONG_RATE_REDIS_HOST:-}
+      KONG_RATE_REDIS_PORT: ${KONG_RATE_REDIS_PORT:-6379}
+      KONG_RATE_REDIS_DATABASE: ${KONG_RATE_REDIS_DATABASE:-0}
+      KONG_RATE_REDIS_USERNAME: ${KONG_RATE_REDIS_USERNAME:-}
+      KONG_RATE_REDIS_PASSWORD: ${KONG_RATE_REDIS_PASSWORD:-}
+      KONG_RATE_REDIS_SSL: ${KONG_RATE_REDIS_SSL:-false}
+      KONG_TRUST_CONSUMER_HEADER: ${KONG_TRUST_CONSUMER_HEADER:-false}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-}
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
+      EMAIL_SERVICE_URL: ${EMAIL_SERVICE_URL:-}
+      EMAIL_SERVICE_TOKEN: ${EMAIL_SERVICE_TOKEN:-}
+      LEGACY_DATABASE_URL: ${LEGACY_DATABASE_URL:-}
+    depends_on: { migrate: { condition: service_completed_successfully }, valkey: { condition: service_healthy }, master: { condition: service_healthy }, calls: { condition: service_healthy } }
+    healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://localhost:5301/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 10s, timeout: 5s, retries: 10 }
+    restart: unless-stopped
+  dashboard-worker:
+    build: { context: ., dockerfile: infra/Dockerfile, target: dashboard }
+    command: [node, ekyc-dashboard-new/server/worker.js]
+    environment:
+      <<: *app-env
+      DASHBOARD_PORT: 5301
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://127.0.0.1:5301}
+      DASHBOARD_MOCK_EXTERNALS: ${DASHBOARD_MOCK_EXTERNALS:-false}
+      DASHBOARD_EXPORT_BUCKET: ${DASHBOARD_EXPORT_BUCKET:-ekyc-dashboard-exports}
+    depends_on: { migrate: { condition: service_completed_successfully }, storage: { condition: service_started } }
+    restart: unless-stopped
+  kong-console:
+    build: { context: ., dockerfile: infra/Dockerfile, target: kong-console }
+    command: [node, kong-console/server.js]
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      TZ: ${TZ:-Asia/Jakarta}
+      VALKEY_URL: redis://valkey:6379
+      KONG_CONSOLE_PORT: 5302
+      KONG_CONSOLE_ORIGIN: ${KONG_CONSOLE_ORIGIN:-http://127.0.0.1:5302}
+      KONG_CONSOLE_USERNAME: ${KONG_CONSOLE_USERNAME:-kong-admin}
+      KONG_CONSOLE_PASSWORD: ${KONG_CONSOLE_PASSWORD:?required}
+      KONG_CONSOLE_DATA_KEY: ${KONG_CONSOLE_DATA_KEY:-}
+      KONG_CONSOLE_ALLOWED_NODE_ORIGINS: ${KONG_CONSOLE_ALLOWED_NODE_ORIGINS:-}
+      KONG_CONSOLE_ALLOWED_WEBHOOK_ORIGINS: ${KONG_CONSOLE_ALLOWED_WEBHOOK_ORIGINS:-}
+      KONG_CONSOLE_ALLOWED_IMPORT_ORIGINS: ${KONG_CONSOLE_ALLOWED_IMPORT_ORIGINS:-}
+      KONG_CONSOLE_IMPORT_API_TOKEN: ${KONG_CONSOLE_IMPORT_API_TOKEN:-}
+      KONG_CONSOLE_SMTP_URL: ${KONG_CONSOLE_SMTP_URL:-}
+      KONG_CONSOLE_SMTP_FROM: ${KONG_CONSOLE_SMTP_FROM:-}
+      KONG_ADMIN_URL: ${KONG_ADMIN_URL:-}
+      KONG_ADMIN_TOKEN: ${KONG_ADMIN_TOKEN:-}
+      KONG_ADMIN_TOKEN_HEADER: ${KONG_ADMIN_TOKEN_HEADER:-Kong-Admin-Token}
+      KONG_API_ROUTE_ID: ${KONG_API_ROUTE_ID:-}
+    depends_on: { valkey: { condition: service_healthy } }
+    healthcheck: { test: ['CMD', 'node', '-e', "fetch('http://localhost:5302/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 10s, timeout: 5s, retries: 10 }
+    restart: unless-stopped
+volumes:
+  postgres-data:
+  valkey-data:
+  storage-data:
+  storage-ui-data:

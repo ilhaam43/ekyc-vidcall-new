@@ -1,0 +1,16 @@
+{
+  "name": "@ekyc/kong-console",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "5.2.1",
+    "express-rate-limit": "8.7.0",
+    "helmet": "8.3.0",
+    "nodemailer": "10.0.15",
+    "redis": "6.2.1"
+  }
+}

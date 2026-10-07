@@ -1,0 +1,21 @@
+{
+  "release": "stable-11248",
+  "files": {
+    "docker-compose.yml": {
+      "url": "https://raw.githubusercontent.com/jitsi/docker-jitsi-meet/stable-11248/docker-compose.yml",
+      "sha256": "bc14c87a739a3884bbb0c4be2e6ef038b9d8971f498282fdb2d4378755d339f6"
+    },
+    "jibri.yml": {
+      "url": "https://raw.githubusercontent.com/jitsi/docker-jitsi-meet/stable-11248/jibri.yml",
+      "sha256": "ecfb5b1aebbd92b062324c27aac99f7cda2d5ee311a97e63ef14523b177cb046"
+    },
+    "env.example": {
+      "url": "https://raw.githubusercontent.com/jitsi/docker-jitsi-meet/stable-11248/env.example",
+      "sha256": "64bfc7949d8ddfa2d715e6a7bf1375100e223a4e9eb810e8db30f0095c35141a"
+    },
+    "LICENSE": {
+      "url": "https://raw.githubusercontent.com/jitsi/docker-jitsi-meet/stable-11248/LICENSE",
+      "sha256": "7b21913be5c199d35302ffe507a6debe158ddc1524ba4b067ca9a803a140246a"
+    }
+  }
+}

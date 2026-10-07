@@ -1,0 +1,11 @@
+import { config, value } from '@ekyc/shared/config';
+import { createDb } from '@ekyc/shared/db';
+import { Storage } from '@ekyc/shared/storage';
+import { listen } from '@ekyc/shared/http';
+import { createApp } from './app.js';
+import { realtime } from './realtime.js';
+import { startWorker } from './worker.js';
+const cfg = config(); const db = createDb(cfg.databaseUrl); const storage = new Storage(cfg);
+const app = createApp(db, cfg, storage); const server = listen(app, Number(value('PORT', '5030')), db);
+const io = await realtime(server, cfg, db); app.locals.io = io;
+startWorker(db, cfg, app.locals.calls, io, app.locals.integration);
