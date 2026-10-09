@@ -3,8 +3,10 @@ services:
   media-proxy:
     image: node:24-bookworm-slim
     entrypoint: [node, -e]
+    environment:
+      JITSI_PROXY_PORT: ${HTTPS_PORT:-9443}
     command:
-      - "const net=require('node:net');net.createServer(client=>{const target=net.connect(8443,'web');client.pipe(target);target.pipe(client);client.on('error',()=>target.destroy());target.on('error',()=>client.destroy())}).listen(443,'0.0.0.0')"
+      - "const net=require('node:net');net.createServer(client=>{const target=net.connect(8443,'web');client.pipe(target);target.pipe(client);client.on('error',()=>target.destroy());target.on('error',()=>client.destroy())}).listen(Number(process.env.JITSI_PROXY_PORT.split(':').at(-1)),'0.0.0.0')"
     depends_on: [web]
     networks:
       meet.jitsi:

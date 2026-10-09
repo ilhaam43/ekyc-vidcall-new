@@ -104,7 +104,7 @@ export class Calls {
         assert(['ringing', 'active'].includes(call.state) && ['reserved', 'recording'].includes(recording?.state), 409, 'RECORDING_NOT_RESERVED');
       }
       const moderator = actor.role === 'agent';
-      const token = jwt.sign({ aud: this.cfg.jitsiAppId, iss: this.cfg.jitsiAppId, sub: this.cfg.jitsiDomain, room: call.room, moderator, context: { user: { id: actor.sub, session_id: actor.sid, name: moderator ? 'Petugas verifikasi' : 'Nasabah', moderator, affiliation: moderator ? 'owner' : 'member' }, features: { recording: false } } }, this.cfg.jitsiSecret, { algorithm: 'HS256', expiresIn: '5m' });
+      const token = jwt.sign({ aud: this.cfg.jitsiAppId, iss: this.cfg.jitsiAppId, sub: new URL(`https://${this.cfg.jitsiDomain}`).hostname, room: call.room, moderator, context: { user: { id: actor.sub, session_id: actor.sid, name: moderator ? 'Petugas verifikasi' : 'Nasabah', moderator, affiliation: moderator ? 'owner' : 'member' }, features: { recording: false } } }, this.cfg.jitsiSecret, { algorithm: 'HS256', expiresIn: '5m' });
       return {
         domain: this.cfg.jitsiDomain,
         server_url: `https://${this.cfg.jitsiDomain}`,
